@@ -34,20 +34,24 @@ protocol_map = {
     137: 'mpls',
     255: 'raw'
 }
-
 # 整数转点分十进制
 def l2ip(ip):
     return ".".join([str(ip >> (i << 3) & 0xff) for i in range(3, -1, -1)])
-send(IP())
 # 配置
 conf.L3socket = L3RawSocket  
-# 清空日志
+# x = IP(src="0.0.0.0", dst="192.168.100.1", tos=255, id=3899)/UDP(sport=1024, dport=65535)
+# x.show()
+# exit()
+# 清空日志  
 os.system("truncate -s 0 /var/log/kern.log")
 sleep(2)
 # 读取classbench-ng下的filter_tuple_trace 封装成数据包发送
+pkt_num = 0
+pkt_map = dict()
 with open("../classbench-ng/filter_tuple_trace", "r") as f:
     pkts = f.readlines()
-    for pkt_num in range(1, len(pkts)+1):
+    pkt_num = len(pkts)
+    for pkt_num in range(1, pkt_num+1):
         line = pkts[pkt_num-1].strip()
         if len(line) == 0: continue
         tuples = line.split("\t")
@@ -67,22 +71,28 @@ with open("../classbench-ng/filter_tuple_trace", "r") as f:
             pkt = IP(src=src, dst=dst, tos=255, id=pkt_num)
         else:
             pkt = IP(src=src, dst=dst, tos=255, id=pkt_num, proto=pf)
-        print(pkt_num, src, dst)
         send(pkt)
-        sleep(1)
+        pkt_map[pkt_num] = [src, dst, sport, dport, protocol]
 # 获取/var/log/kern.log中的开头为"PKT_255"的日志行
-sleep(5)
+# 获取前，重新发送几个数据包，刷新日志缓冲区
+for i in range(100): 
+    send(IP(src="0.0.0.0", dst="1.1.1.1", tos=255, id=65535))
+sleep(2)
 ret = os.system("grep PKT_255 /var/log/kern.log > ./pkt.log")
 hs = dict()
 with open("./pkt.log", "r") as f:
-    out = open("./match_out.txt", "w")
     lines = f.readlines()
     for line in lines:
         index = line.find("PKT_255")
         line = line.strip()[index:].split()
-        if (line[1] not in hs): hs[line[1]] = line[9]
+        x, y = int(line[1]), int(line[9])
+        if (line[1] not in hs): hs[x] = y
 # 记录结果 <pkt, rule_id>
+print(pkt_num, min(hs.keys()), max(hs.keys()))
+error = open("./error", "w")
 with open("./match_out.txt", "w") as f:
-    arr = sorted(hs.items(), key=lambda x: int(x[0]))
-    for item in arr:
-        f.write("{} {}\n".format(item[0], item[1]))
+    for item in range(1, pkt_num+1):
+        f.write("{} {}\n".format(item, hs.get(item, 0)))
+        if (hs.get(item, 0) == 0): 
+            error.write(" ".join(pkt_map[item])+"\n")
+error.close()

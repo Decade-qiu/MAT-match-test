@@ -5,10 +5,8 @@ cd /home/qzj/src/classbench-ng && sudo python3 -u "/home/qzj/src/classbench-ng/t
 """
 import os
 import random
-
 # 常用端口号
 port = [20, 21, 22, 23, 25, 53, 69, 80, 110, 119, 123, 135, 137, 138, 139, 143, 161, 389, 443, 445, 465, 873, 1080, 1158, 1433, 1521, 2100, 3128, 3389, 3306, 5432, 5601, 6379, 8080, 8081, 8888, 9000, 9080, 9090, 9200, 10050, 10051, 11211, 22122, 27017]
-
 # 协议映射
 protocol_map = {
     0: 'ip',
@@ -37,16 +35,14 @@ protocol_map = {
     137: 'mpls',
     255: 'raw'
 }
-
 # 全局规则列表
 RULE_IDX = 1
 rule_set = []
-
 # 每个seed规则生成数
-pre_cnt = 50
-
+pre_cnt = 1000
+tuples_num = 0
 # trace_generate参数
-a, b, scale = 1, 0.001, 1
+a, b, scale = 1, 0.00001, 3
 
 # 添加规则
 def add(src, dst, protocol, sport, dport, pf, sf, df):
@@ -78,6 +74,7 @@ def tuple2rule(t):
         #     tport = str(random.choice(port))
         #     add(src, dst, protocol, sport, tport+":"+tport, '', '', '!')
     else:
+        if (src=="0.0.0.0/0" and dst=="0.0.0.0/0"): return
         add(src, dst, protocol, -1, -1, '', '', '')
         # 协议取反 
         # 1.不能对IP协议取反 2.如果协议后面带端口号，则不能取反
@@ -88,6 +85,7 @@ filter_tuple = open("filter_tuple", "w")
 # 读取参数文件
 dir_path = './vendor/parameter_files'
 for filename in os.listdir(dir_path):
+    if (not filename.startswith("fw")): continue
     if os.path.isfile(os.path.join(dir_path, filename)):
         command = "./classbench generate v4 ./vendor/parameter_files/{} --count={}".format(filename, pre_cnt)
         output = os.popen(command).read()
@@ -99,6 +97,7 @@ for filename in os.listdir(dir_path):
             fd = line.split("\t")
             fd[0] = fd[0][1:]
             tuple2rule(fd)
+            tuples_num += 1
 filter_tuple.close()
 # 通过tuple规则生成pkt头部信息
 cmd = "./trace_generator/trace_generator {} {} {} {}".format(a, b, scale, "filter_tuple")
@@ -110,3 +109,5 @@ with open("rule_set.txt", 'w') as f:
     for r in rule_set:
         f.write(r)
         f.write('\n')
+
+print("tuples num: {}\nrules num: {}".format(tuples_num, RULE_IDX))
