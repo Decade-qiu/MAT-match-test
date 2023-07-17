@@ -1,7 +1,0 @@
-{
-    "files.associations": {
-        "stdlib.h": "c",
-        "syslog.h": "c"
-    },
-    "git.ignoreLimitWarning": true
-}
