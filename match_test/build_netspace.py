@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-cd /home/qzj/src/match_test && sudo python3 -u "/home/qzj/src/match_test/build_netspace.py"
+cd ./match_test && sudo python3 -u "./build_netspace.py"
 """
 import os
 

@@ -29,6 +29,11 @@ int header_gen(int d, FilterList* filters, FILE *fp, float a, float b, int scale
   // Allocate temporary header
   unsigned *new_hdr = new unsigned[d];
 
+    for (int i = 0;i < fsize;i++){
+        RandomCorner(i, filts,new_hdr);
+        headers->add(new_hdr, i);
+    }
+
   // Generate headers
   while(num_headers < threshold){
     // Pick a random filter
@@ -55,7 +60,7 @@ int header_gen(int d, FilterList* filters, FILE *fp, float a, float b, int scale
   delete(new_hdr);
   delete(headers);
 
-  return num_headers;
+  return num_headers+fsize;
 }
 
 void RandomCorner(int RandFilt, flist* filts, unsigned* new_hdr){
