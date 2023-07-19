@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-cd ./match_test && sudo ip netns exec MAT python3 -u "./send_pkt.py"
+cd ./match_test && sudo ip netns exec MAT python3 -u "./send_pkt.py" && cd ..
 """
 from time import sleep
 from scapy.all import *
 from scapy.layers.inet import *
 from scapy.contrib.igmp import IGMP
+# 配置
+conf.L3socket = L3RawSocket 
+
 # 整数转点分十进制
 def l2ip(ip):
     return ".".join([str(ip >> (i << 3) & 0xff) for i in range(3, -1, -1)])
@@ -23,11 +26,8 @@ def generate_pkt(src, dst, sport, dport, protocol, pkt_num):
         pkt = IP(src=src, dst=dst, tos=255, id=pkt_num, proto=protocol)
     return pkt
 
-# 配置
-conf.L3socket = L3RawSocket 
-
 # debug
-# x = IP(src='60.40.128.61', dst='54.187.170.46', tos=255, id=1112)/TCP(dport=22)
+# x = IP(src='58.249.190.113', dst='128.0.0.0', tos=255, id=222, proto=47)
 # x.show()
 # send(x)
 # exit()
@@ -48,7 +48,9 @@ with open("./filter_tuple_trace", "r") as f:
         tuples = line.split("\t")
         src, dst, sport, dport, protocol = [int(tuples[i]) for i in range(5)]
         # 去除广播地址
-        if (dst == 4294967295): dst = 0
+        if (dst == 4294967295 or dst == 2147483647): dst = 1
+        # 去除本地地址
+        if (src == 0): src = 1
         src, dst = l2ip(src), l2ip(dst)
         pkt = generate_pkt(src, dst, sport, dport, protocol, num)
         send(pkt)
@@ -61,28 +63,31 @@ sleep(2)
 
 # 获取/var/log/kern.log中的开头为"PKT_255"的日志行
 ret = os.system("grep PKT_255 /var/log/kern.log > ./pkt.log")
-hs = dict()
+match_out = dict()
 with open("./pkt.log", "r") as f:
     lines = f.readlines()
     for line in lines:
         index = line.find("PKT_255")
         line = line.strip()[index:].split()
         x, y = int(line[1]), int(line[9])
-        if (line[1] not in hs): hs[x] = y
+        if (line[1] not in match_out): 
+            match_out[x] = y
 
 # 记录结果 <pkt, rule>
 pkt_not_match = open("./pkt_not_match", "w")
-with open("./match_out.txt", "w") as f:
+with open("./match_out", "w") as f:
     for item in range(1, pkt_num+1):
-        f.write("{} {}\n".format(item, hs.get(item, -1)))
-        if (hs.get(item, -1) == -1): 
+        f.write("{} {}\n".format(item, match_out.get(item, -1)))
+        if (match_out.get(item, -1) == -1): 
             pkt_not_match.write(" ".join([str(i) for i in pkt_map[item]])+"\n")
 pkt_not_match.close()
 
 # 记录没有任何数据包匹配的rule
 rule_not_match = open("./rule_not_match", "w")
-with open("./rule_set.txt", "r") as f:
-    rule_num = len([i for i in f.readlines() if len(i.strip()) > 0])
+with open("./rule_set", "r") as f:
+    rule_set = f.readlines()
+    rule_num = len(rule_set)
     for i in range(1, rule_num+1):
-        if (i not in hs.values()): rule_not_match.write("{}\n".format(i))
+        if (i not in match_out.values()): 
+            rule_not_match.write("{}".format(str(rule_set[i-1])))
 rule_not_match.close()

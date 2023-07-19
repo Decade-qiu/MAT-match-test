@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-cd ./match_test && sudo python3 -u "./set_iptables.py"
+cd ./match_test && sudo python3 -u "./set_iptables.py" && cd ..
 """
 import os, time
 # 网络命名空间
@@ -17,7 +17,7 @@ os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags URG URG -j DRO
 
 # 读取规则并执行
 total_rules = 0
-with open("../classbench-ng/rule_set.txt", "r") as f:
+with open("./rule_set", "r") as f:
     for line in f.readlines():
         line = line.strip()
         cmd = "ip netns exec {} {}".format(NETNS, line)
