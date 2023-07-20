@@ -2,9 +2,16 @@
 """
 cd match_test && sudo python3 -u "./gen_rule_pkt.py" && cd ..
 """
-import os, random, re
+import argparse, os, random, re
 from collections import defaultdict
 from ipaddress import *
+import sys
+from time import sleep
+# 文件路径
+cur_path = os.path.dirname(__file__)
+parent_path = os.path.dirname(cur_path)
+sys.path.append(cur_path)
+import tx_packets
 # 协议类型
 total_pf = ["0x00/0x00", "0x06/0xFF", "0x11/0xFF", "0x01/0xFF", "0x2F/0xFF", "0x02/0xFF", "0x03/0xFF", "0x04/0xFF", "0x05/0xFF", "0x07/0xFF", "0x08/0xFF"]
 total_protocol = ["0", "6", "17", "1", "47", "2", "3", "4", "5", "7", "8"]
@@ -14,11 +21,39 @@ rule_list = list()
 # tuple规则集合
 tuple_set = set()
 # db_generate参数
-filter_num, smooth, address_scope, port_scope = 6000, 3, -0.7, -0.75
+filter_num, smooth, address_scope, port_scope = 10000, 3, -0.7, -0.75
 # trace_generate参数
 a, b, scale = 1, 0, 5
 # 已经生成的rules中<src, dst>集合
-address_pair = set()
+address_pair = dict()
+
+# init
+def init(args1, args2):
+    global filter_num, scale
+    filter_num = args1
+    scale = args2
+
+# finish
+def finish():
+    global tuple_set, rule_list
+    pkts_num = 0
+    lines = None
+    with open(os.path.join(cur_path, "filter_tuple_trace")) as f:
+        lines = f.readlines()
+        pkts_num = len(lines)
+    with open(os.path.join(parent_path, "output", "packets"), "w") as f:
+        for idx, line in enumerate(lines):
+            tuples = line.split("\t")
+            src, dst, sport, dport, protocol = [int(tuples[i]) for i in range(5)]
+            # 去除广播地址
+            if (dst == 4294967295 or dst == 2147483647): dst = 1
+            # 去除本地地址
+            if (src == 0): src = 1
+            f.write("ID={} {} {} {} {} {}\n".format(idx+1, IPv4Address(src), IPv4Address(dst), protocol, sport, dport))
+    print("Total tuples: {}".format(len(tuple_set)))
+    print("Total rules: {}".format(len(rule_list)))
+    print("Total packets: {}".format(pkts_num))
+    print("Finish!")
 
 # 生成随机子网
 def getSubnet():
@@ -48,7 +83,6 @@ def get_head(rule):
 # iptables rule规则排序
 def sort_rules(r):
     src, dst, sport, dport, protocol, pf, sf, df = get_head(r)
-    # print(get_head(r))
     src_ip, src_mask = src.split('/')
     dst_ip, dst_mask = dst.split('/')
     sport_start, sport_end = map(int, sport.split(':'))
@@ -116,7 +150,6 @@ def gen_pkt_iptables():
             if (flag == 1):
                 break
         while (idx < n and get_head_address_pair(rules[idx]) == pre_ip):
-            print("processing rule {}".format(idx))
             _, _, sport, dport, protocol, pf, sf, df = get_head(rules[idx])
             if pf:
                 cur_pf = random.choice(total_protocol)
@@ -135,33 +168,46 @@ def gen_pkt_iptables():
     rule_list = res_rules
     return packets
 
-# 保存通过iptables生成pkt的头部信息
+# 保存iptables规则
 def save_pkt_iptabes(model='w'):
-    packets = open("filter_tuple_trace", model)
-    pkt = gen_pkt_iptables()
-    for p in pkt:
-        packets.write(p+"\n")
-    packets.close()
+    with open(os.path.join(cur_path, "filter_tuple_trace"), model) as packets:
+        pkts = gen_pkt_iptables()
+        for p in pkts:
+            packets.write(p+"\n")
+    with open(os.path.join(parent_path, "output", "rule_set"), 'w') as filter_rule:
+        for dx in range(0, len(rule_list)):
+            t = rule_list[dx]
+            filter_rule.write('{} -m comment --comment "{}"\n'.format(t, dx+1))
 
-# 保存通过tuples生成pkt头部信息
+# 保存tuples并生成对应pkt头部信息
 def save_pkt_tuples():
     global a, b, scale
-    cmd = "../classbench-ng/trace_generator/trace_generator {} {} {} {}".format(a, b, scale, "filter_tuple")
+    with open(os.path.join(cur_path, "filter_tuple"), "w") as filter_tuple:
+        for tuples in tuple_set:
+            filter_tuple.write(tuples+"\t\n")
+    cmd = os.path.join(parent_path, "classbench-ng", "trace_generator", "trace_generator")+" {} {} {} {}".format(a, b, scale, os.path.join(cur_path, "filter_tuple"))
     status = os.system(cmd)
     if (status != 0): 
         print("ERROR: trace_generator!")
 
 # 添加规则
 def add(src, dst, protocol, sport, dport, t_sport, t_dport, t_protocol):
+    global address_pair, rule_set, tuple_set
     if (sport == -1 and dport == -1):
         rule = "iptables -A OUTPUT -s {} -d {} -p {} -j ACCEPT ".format(src, dst, protocol)
         tuples = "@{}\t{}\t{}\t{}\t{}\t0x0000/0x0000".format(src, dst, "0 : 65535", "0 : 65535", t_protocol)
     else:
         rule = "iptables -A OUTPUT -s {} -d {} -p {} --sport {} --dport {} -j ACCEPT ".format(src, dst, protocol, sport, dport)
         tuples = "@{}\t{}\t{}\t{}\t{}\t0x0000/0x0000".format(src, dst, t_sport, t_dport, t_protocol)
-    src, dst = [ip.split('/')[0] for ip in [src, dst]]
-    key = src+" "+dst
-    address_pair.add(key)
+    _src, _dst = [ip.split('/')[0] for ip in [src, dst]]
+    _src_mask, _dst_mask = [ip.split('/')[1] for ip in [src, dst]]
+    key = _src+" "+_dst
+    value = _src_mask+" "+_dst_mask
+    if (key in address_pair.keys()):
+        if (value != address_pair[key]):
+            return
+    else:
+        address_pair[key] = value
     rule_set.add(rule)
     tuple_set.add(tuples)
 
@@ -182,16 +228,17 @@ def tuple2rule(t):
         add(src, dst, protocol, -1, -1, t_sport, t_dport, t_protocol)
 
 # 协议取反类型的规则
-def gen_invert_protocol():
+def gen_invert_protocol_rule():
+    global address_pair, rule_set, tuple_set, total_pf
     for pf in total_pf:
         if (pf == "0x00/0x00"): continue
         # 生成随机src dst
         src, dst = 0, 0
         while 1:
             src, dst = getSubnet(), getSubnet()
-            if (src.split('/')[0]+" "+dst.split('/')[0] not in address_pair):
+            if (src.split('/')[0]+" "+dst.split('/')[0] not in address_pair.keys()):
                 break
-        address_pair.add(src.split('/')[0]+" "+dst.split('/')[0])
+        address_pair[src.split('/')[0]+" "+dst.split('/')[0]] = src.split('/')[1]+" "+dst.split('/')[1]
         rule = "iptables -A OUTPUT -s {} -d {} ! -p {} -j ACCEPT ".format(src, dst, int(pf[:4], 16))
         rule_set.add(rule)
         for ac_pf in total_pf:
@@ -200,16 +247,17 @@ def gen_invert_protocol():
             tuple_set.add(tuples)
 
 # 端口取反的规则
-def gen_invert_port():
+def gen_invert_port_rule():
+    global address_pair, rule_set, tuple_set
     for pf in ["0x11/0xFF", "0x06/0xFF"]:
         for i in range(10):
-            src, dst = 0, 0
-            while 1:
-                src, dst = getSubnet(), getSubnet()
-                if (src.split('/')[0]+" "+dst.split('/')[0] not in address_pair):
-                    break
-            address_pair.add(src.split('/')[0]+" "+dst.split('/')[0])
             for st in ["! ", " !", "!!"]:
+                src, dst = 0, 0
+                while 1:
+                    src, dst = getSubnet(), getSubnet()
+                    if (src.split('/')[0]+" "+dst.split('/')[0] not in address_pair.keys()):
+                        break
+                address_pair[src.split('/')[0]+" "+dst.split('/')[0]] = src.split('/')[1]+" "+dst.split('/')[1]
                 sport = random.randint(0, 1024)
                 dport = random.randint(1024, 65535)
                 rule = "iptables -A OUTPUT -s {} -d {} -p {} {} --sport {}:{} {} --dport {}:{} -j ACCEPT ".format(src, dst, int(pf[:4], 16), st[0], sport, sport, st[1], dport, dport)
@@ -223,54 +271,124 @@ def gen_invert_port():
                     tuples = "@{}\t{}\t{} : {}\t{} : {}\t{}\t0x0000/0x0000".format(src, dst, 1024, 65535, 0, 1023, pf)
                 tuple_set.add(tuples)
 
+# 生成iptables规则
+def gen_filter_rule():
+    with open(os.path.join(cur_path, "filter_tuple"), "r") as filter_tuple:
+        tuples_list = filter_tuple.readlines()
+        for tuples in tuples_list:
+            line = tuples.strip()
+            if (len(line)==0 or line[0] != '@'): 
+                continue
+            fd = line.split("\t")
+            fd[0] = fd[0][1:]
+            tuple2rule(fd)
+
 # 使用classbench中Filter set generator生成tuple规则
 def gen_filter_tuple():
+    global filter_num, smooth, address_scope, port_scope
     # command = "../classbench-ng/vendor/db_generator/db_generator -c ../classbench-ng/vendor/parameter_files/fw1_seed {} {} {} {} filter_tuple".format(filter_num, smooth, address_scope, port_scope)
     # os.system(command)
-    with open("filter_tuple", "w") as f: 
-        dir_path = "../classbench-ng/vendor/parameter_files"
+    with open(os.path.join(cur_path, "filter_tuple"), "w") as f: 
+        dir_path = os.path.join(parent_path, "classbench-ng", "vendor", "parameter_files")
         for file in os.listdir(dir_path):
-            if (not file.startswith("fw1")): continue
+            if (not file.startswith("fw")): continue
             if os.path.isfile(os.path.join(dir_path, file)):
-                print("Generating {}!".format(file))
-                command = "../classbench-ng/classbench generate v4 ../classbench-ng/vendor/parameter_files/{} --count={} --db-generator=../classbench-ng/vendor/db_generator/db_generator".format(file, filter_num)
+                command = os.path.join(parent_path, "classbench-ng", "classbench")+" generate v4 "+os.path.join(dir_path, file)+" --count={} --db-generator=".format(filter_num)+os.path.join(parent_path, "classbench-ng", "vendor", "db_generator", "db_generator")
+                print(command)
                 output = os.popen(command).read()
                 f.write(output)
 
-gen_filter_tuple()
-# 读取tuple规则并进行iptables规则转换
-filter_tuple = open("filter_tuple", "r")
-tuples_list = filter_tuple.readlines()
-for tuples in tuples_list:
-    line = tuples.strip()
-    if (len(line)==0 or line[0] != '@'): 
-        continue
-    fd = line.split("\t")
-    fd[0] = fd[0][1:]
-    tuple2rule(fd)
-filter_tuple.close()
+# 记录未匹配的数据包
+def log_pkt_error(pkt_not_match):
+    with open(os.path.join(parent_path, "output", "pkt_not_match"), "w") as f:
+        for pkt in pkt_not_match:
+            pkt = pkt.strip()
+            f.write(pkt+"\n")
 
-# 生成取反规则
-gen_invert_port()
-gen_invert_protocol()
+# 记录未匹配的规则
+def log_rule_error(rule_not_match):
+    with open(os.path.join(parent_path, "output", "rule_not_match"), "w") as f:
+        for rule in rule_not_match:
+            rule = rule.strip()
+            f.write(rule+"\n")
 
-# 保存tuple规则到文件
-filter_tuple = open("filter_tuple", "w")
-for tuples in tuple_set:
-    filter_tuple.write(tuples+"\t\n")
-filter_tuple.close()
+# 获取匹配的输出结果<packet_id, rule_id>
+def get_match_out():
+    os.system("truncate -s 0 /var/log/kern.log")
+    sleep(2)
+    pkts = os.path.join(parent_path, "output", "packets")
+    packet_set, ac_num = tx_packets.main(pkts)
+    # 获取/var/log/kern.log
+    tp_log = os.path.join(cur_path, "tp.log")
+    ret = os.system("grep PKT_255 /var/log/kern.log > {}".format(tp_log))
+    if (ret != 0):
+        print("ERROR: read log error!")
+        return
+    match_out = dict()
+    with open(tp_log, "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            index = line.find("PKT_255")
+            line = line.strip()[index:].split()
+            x, y = int(line[1]), int(line[9])
+            match_out[x] = y
+    # 记录结果
+    pkt_not_match = []
+    rule_not_match = []
+    with open(os.path.join(parent_path, "output", "match_out"), "w") as f:
+        for item in range(1, ac_num+1):
+            f.write("{} {}\n".format(item, match_out.get(item, -1)))
+            if (match_out.get(item, -1) == -1): 
+                pkt_not_match.append(packet_set[item-1])
+    for idx in range(1, len(rule_list)+1):
+        if (idx not in match_out.values()):
+            rule_not_match.append(rule_list[idx])
+    if (len(pkt_not_match) != 0):
+        log_pkt_error(pkt_not_match)
+    if (len(rule_not_match) != 0):
+        log_rule_error(rule_not_match)
 
-# 保存通过tuples生成pkt头部信息
-save_pkt_tuples()
+# 更新iptables里的规则
+def update_iptables_rules(netns):
+    # 网络命名空间
+    NETNS = netns
+    os.system("ip netns exec {} iptables -F".format(NETNS))
+    # 禁止所有icmp非requst-echo报文
+    os.system("ip netns exec {} iptables -A OUTPUT -p icmp ! --icmp-type echo-request -j DROP".format(NETNS))
+    # 禁止所有tcp, ACK FIN PSH RST URG报文
+    os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags ACK ACK -j DROP".format(NETNS))
+    os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags FIN FIN -j DROP".format(NETNS))
+    os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags PSH PSH -j DROP".format(NETNS))
+    os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags RST RST -j DROP".format(NETNS))
+    os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags URG URG -j DROP".format(NETNS))
+    # 读取规则并执行
+    total_rules = 0
+    with open(os.path.join(parent_path, "output", "rule_set"), "r") as f:
+        for line in f.readlines():
+            line = line.strip()
+            cmd = "ip netns exec {} {}".format(NETNS, line)
+            status = os.system(cmd)
+            if status != 0:
+                print("Error: {}".format(line))
+                break
+            total_rules += 1
+    print("iptables has set {} rules!".format(total_rules))
+    # 添加一个默认接受规则
+    os.system("ip netns exec {} iptables -A OUTPUT -j ACCEPT -m comment --comment 0".format(NETNS))
 
-# 保存通过iptables规则生成pkt的头部信息
-save_pkt_iptabes('a')
+def main(rules_num, scale, netspace):
+    init(rules_num, scale)
+    gen_filter_tuple()
+    gen_filter_rule()
+    gen_invert_port_rule()
+    gen_invert_protocol_rule()
+    save_pkt_tuples()
+    save_pkt_iptabes('a')
+    finish()
+    update_iptables_rules(netspace)
+    get_match_out()
 
-# 保存iptables规则到文件（排序）
-filter_rule = open("rule_set", 'w')
-for dx in range(0, len(rule_list)):
-    t = rule_list[dx]
-    filter_rule.write('{} -m comment --comment "{}"\n'.format(rule_list[dx],dx+1))
-filter_rule.close()
-
-print("tuples num: {}\nrules num: {}".format(len(tuple_set), len(rule_list)))
+if __name__ == "__main__":
+    cur_path = os.path.dirname(os.path.abspath(__file__))
+    parent_path = os.path.dirname(os.path.abspath(cur_path))
+    print(cur_path, parent_path)
