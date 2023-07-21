@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-cd match_test && sudo python3 -u "./gen_rule_pkt.py" && cd ..
-"""
 import argparse, os, random, re
 from collections import defaultdict
 from ipaddress import *
@@ -25,7 +22,8 @@ filter_num, smooth, address_scope, port_scope = 10000, 3, -0.7, -0.75
 # trace_generate参数
 a, b, scale = 1, 0, 5
 # 已经生成的rules中<src, dst>集合
-address_pair = dict()
+address_pair = defaultdict(dict)
+address_src_mask = defaultdict(int)
 
 # init
 def init(args1, args2):
@@ -53,7 +51,6 @@ def finish():
     print("Total tuples: {}".format(len(tuple_set)))
     print("Total rules: {}".format(len(rule_list)))
     print("Total packets: {}".format(pkts_num))
-    print("Finish!")
 
 # 生成随机子网
 def getSubnet():
@@ -126,6 +123,7 @@ def get_sport_dport(port_range, pf_port):
 # 根据iptables规则生成packet测试集
 def gen_pkt_iptables():
     global rule_list, rule_set
+    print("Generate packets from iptables rules...")
     rule_list = list(rule_set)
     rule_list.sort(key=sort_rules)
     rules = rule_list
@@ -190,6 +188,20 @@ def save_pkt_tuples():
     if (status != 0): 
         print("ERROR: trace_generator!")
 
+# 判断rule中ip对是否可以插入
+def ip_prefix(src, dst):
+    _src, _dst = [ip.split('/')[0] for ip in [src, dst]]
+    _src_mask, _dst_mask = [ip.split('/')[1] for ip in [src, dst]]
+    if (_src in address_src_mask.keys()):
+        if (_src_mask != address_src_mask[_src]):
+            return False
+        if (_dst in address_pair[_src].keys()):
+            if (_dst_mask != address_pair[_src][_dst]):
+                return False
+    address_src_mask[_src] = _src_mask
+    address_pair[_src][_dst] = _dst_mask
+    return True
+
 # 添加规则
 def add(src, dst, protocol, sport, dport, t_sport, t_dport, t_protocol):
     global address_pair, rule_set, tuple_set
@@ -199,17 +211,9 @@ def add(src, dst, protocol, sport, dport, t_sport, t_dport, t_protocol):
     else:
         rule = "iptables -A OUTPUT -s {} -d {} -p {} --sport {} --dport {} -j ACCEPT ".format(src, dst, protocol, sport, dport)
         tuples = "@{}\t{}\t{}\t{}\t{}\t0x0000/0x0000".format(src, dst, t_sport, t_dport, t_protocol)
-    _src, _dst = [ip.split('/')[0] for ip in [src, dst]]
-    _src_mask, _dst_mask = [ip.split('/')[1] for ip in [src, dst]]
-    key = _src+" "+_dst
-    value = _src_mask+" "+_dst_mask
-    if (key in address_pair.keys()):
-        if (value != address_pair[key]):
-            return
-    else:
-        address_pair[key] = value
-    rule_set.add(rule)
-    tuple_set.add(tuples)
+    if (ip_prefix(src, dst)):
+        rule_set.add(rule)
+        tuple_set.add(tuples)
 
 # tuple规则转换为iptables规则
 def tuple2rule(t):
@@ -230,15 +234,15 @@ def tuple2rule(t):
 # 协议取反类型的规则
 def gen_invert_protocol_rule():
     global address_pair, rule_set, tuple_set, total_pf
+    print("Generate invert protocol rules...")
     for pf in total_pf:
         if (pf == "0x00/0x00"): continue
         # 生成随机src dst
         src, dst = 0, 0
         while 1:
             src, dst = getSubnet(), getSubnet()
-            if (src.split('/')[0]+" "+dst.split('/')[0] not in address_pair.keys()):
+            if (ip_prefix(src, dst)):
                 break
-        address_pair[src.split('/')[0]+" "+dst.split('/')[0]] = src.split('/')[1]+" "+dst.split('/')[1]
         rule = "iptables -A OUTPUT -s {} -d {} ! -p {} -j ACCEPT ".format(src, dst, int(pf[:4], 16))
         rule_set.add(rule)
         for ac_pf in total_pf:
@@ -249,15 +253,15 @@ def gen_invert_protocol_rule():
 # 端口取反的规则
 def gen_invert_port_rule():
     global address_pair, rule_set, tuple_set
+    print("Generate invert port rules...")
     for pf in ["0x11/0xFF", "0x06/0xFF"]:
         for i in range(10):
             for st in ["! ", " !", "!!"]:
                 src, dst = 0, 0
                 while 1:
                     src, dst = getSubnet(), getSubnet()
-                    if (src.split('/')[0]+" "+dst.split('/')[0] not in address_pair.keys()):
+                    if (ip_prefix(src, dst)):
                         break
-                address_pair[src.split('/')[0]+" "+dst.split('/')[0]] = src.split('/')[1]+" "+dst.split('/')[1]
                 sport = random.randint(0, 1024)
                 dport = random.randint(1024, 65535)
                 rule = "iptables -A OUTPUT -s {} -d {} -p {} {} --sport {}:{} {} --dport {}:{} -j ACCEPT ".format(src, dst, int(pf[:4], 16), st[0], sport, sport, st[1], dport, dport)
@@ -273,6 +277,7 @@ def gen_invert_port_rule():
 
 # 生成iptables规则
 def gen_filter_rule():
+    print("Generate iptables rules...")
     with open(os.path.join(cur_path, "filter_tuple"), "r") as filter_tuple:
         tuples_list = filter_tuple.readlines()
         for tuples in tuples_list:
@@ -291,10 +296,10 @@ def gen_filter_tuple():
     with open(os.path.join(cur_path, "filter_tuple"), "w") as f: 
         dir_path = os.path.join(parent_path, "classbench-ng", "vendor", "parameter_files")
         for file in os.listdir(dir_path):
-            if (not file.startswith("fw")): continue
+            # if (not file.startswith("fw")): continue
             if os.path.isfile(os.path.join(dir_path, file)):
+                print("Generate tuples from {}.".format(file))
                 command = os.path.join(parent_path, "classbench-ng", "classbench")+" generate v4 "+os.path.join(dir_path, file)+" --count={} --db-generator=".format(filter_num)+os.path.join(parent_path, "classbench-ng", "vendor", "db_generator", "db_generator")
-                print(command)
                 output = os.popen(command).read()
                 f.write(output)
 
@@ -316,6 +321,7 @@ def log_rule_error(rule_not_match):
 def get_match_out():
     os.system("truncate -s 0 /var/log/kern.log")
     sleep(2)
+    print("Send packets...")
     pkts = os.path.join(parent_path, "output", "packets")
     packet_set, ac_num = tx_packets.main(pkts)
     # 获取/var/log/kern.log
@@ -342,11 +348,10 @@ def get_match_out():
                 pkt_not_match.append(packet_set[item-1])
     for idx in range(1, len(rule_list)+1):
         if (idx not in match_out.values()):
-            rule_not_match.append(rule_list[idx])
-    if (len(pkt_not_match) != 0):
-        log_pkt_error(pkt_not_match)
-    if (len(rule_not_match) != 0):
-        log_rule_error(rule_not_match)
+            rule_not_match.append("ID="+str(idx)+" "+rule_list[idx-1])
+    log_pkt_error(pkt_not_match)
+    log_rule_error(rule_not_match)
+    print("Finish, related matching record information is located in the output folder!")
 
 # 更新iptables里的规则
 def update_iptables_rules(netns):

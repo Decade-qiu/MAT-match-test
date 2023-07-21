@@ -5,7 +5,9 @@ from scapy.layers.inet import *
 from scapy.contrib.igmp import IGMP
 from ipaddress import *
 
+# 配置
 conf.L3socket = L3RawSocket 
+conf.verb = 0
 
 # 构造数据包
 def generate_pkt(src, dst, sport, dport, protocol, pkt_num):
@@ -34,7 +36,7 @@ def main(pkt_file):
             protocol, sport, dport = int(protocol), int(sport), int(dport)
             num = int(_[3:])
             pkt = generate_pkt(src, dst, sport, dport, protocol, num)
-            send(pkt)
+            send(pkt, verbose=False)
             ac_num += 1
     sleep(1)
     for i in range(100): 
