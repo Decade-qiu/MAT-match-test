@@ -17,3 +17,4 @@ gen_rule_pkt.main(args.rules_num, args.pkt_factor, args.netspace)
 
 # 删除多余输出
 os.system("rm gmon.out")
+os.system("rm {}".format(os.path.join(os.path.dirname(__file__), "match_test", "tp.log")))
