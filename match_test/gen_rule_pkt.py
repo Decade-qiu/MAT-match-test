@@ -394,6 +394,4 @@ def main(rules_num, scale, netspace):
     get_match_out()
 
 if __name__ == "__main__":
-    cur_path = os.path.dirname(os.path.abspath(__file__))
-    parent_path = os.path.dirname(os.path.abspath(cur_path))
-    print(cur_path, parent_path)
+    update_iptables_rules("MAT")

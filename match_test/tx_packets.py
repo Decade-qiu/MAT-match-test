@@ -42,5 +42,5 @@ def main(pkt_file):
     for i in range(100): 
         send(IP(src="0.0.1.0", dst="1.1.1.1", tos=255, id=65535))
     sleep(2)
-    print("已发送{}个数据包".format(ac_num))
+    print("Has send {} packets.".format(ac_num))
     return pkts, ac_num
