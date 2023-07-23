@@ -36,4 +36,4 @@ with open(match_record, "w") as f:
             error += 1
         else:
             f.write("Pass.\n")
-print("Total: {}, passed: {}\nThe detailed information is in the 'match_error' under the output folder.".format(total, total-error))
+print("Total: {}, passed: {}\nThe detailed information is in the 'match_record' under the output folder.".format(total, total-error))
