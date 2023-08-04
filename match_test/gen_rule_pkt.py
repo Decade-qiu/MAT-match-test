@@ -4,6 +4,8 @@ from collections import defaultdict
 from ipaddress import *
 import sys
 from time import sleep
+from scapy.all import *
+from scapy.layers.inet import *
 # 文件路径
 cur_path = os.path.dirname(__file__)
 parent_path = os.path.dirname(cur_path)
@@ -317,6 +319,31 @@ def log_rule_error(rule_not_match):
             rule = rule.strip()
             f.write(rule+"\n")
 
+# 构造数据包
+def generate_pkt(pkt_num, src, dst, sport, dport, protocol, rule_id):
+    pkt = None
+    if protocol == 6:
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/TCP(sport=sport, dport=dport)/"{}".format(pkt_num)
+    elif protocol == 17:
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/UDP(sport=sport, dport=dport)/"{}".format(pkt_num)
+    elif protocol == 1:
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/ICMP()/"{}".format(pkt_num)
+    else: 
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id, proto=protocol)/"{}".format(pkt_num)
+    return pkt
+
+# 生成数据包文件 ip头部中的id为匹配的rule编号
+def get_pcap(file):
+    with open(file, "r") as f:
+        lines = f.readlines()
+        pkts = []
+        for line in lines:
+            index = line.find("PKT_255")
+            line = line.strip()[index:].split()
+            if (int(line[1]) == 65535): continue
+            pkts.append(generate_pkt(int(line[1]), line[4], line[5], int(line[6]), int(line[7]), int(line[8]), int(line[9])))
+        wrpcap(os.path.join(parent_path, "output", "packets.pcap"), pkts)
+
 # 获取匹配的输出结果<packet_id, rule_id>
 def get_match_out():
     os.system("truncate -s 0 /var/log/kern.log")
@@ -330,6 +357,7 @@ def get_match_out():
     if (ret != 0):
         print("ERROR: read log error!")
         return
+    get_pcap(tp_log)
     match_out = dict()
     with open(tp_log, "r") as f:
         lines = f.readlines()
