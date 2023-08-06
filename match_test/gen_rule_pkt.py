@@ -46,9 +46,9 @@ def finish():
             tuples = line.split("\t")
             src, dst, sport, dport, protocol = [int(tuples[i]) for i in range(5)]
             # 去除广播地址
-            if (dst == 4294967295 or dst == 2147483647): dst = 1
+            if (dst == 4294967295 or dst == 2147483647 or dst == 0): dst = 1
             # 去除本地地址
-            if (src == 0): src = 1
+            if (src == 4294967295 or src == 2147483647 or src == 0): src = 1
             f.write("ID={} {} {} {} {} {}\n".format(idx+1, IPv4Address(src), IPv4Address(dst), protocol, sport, dport))
     print("Total tuples: {}".format(len(tuple_set)))
     print("Total rules: {}".format(len(rule_list)))
@@ -323,13 +323,13 @@ def log_rule_error(rule_not_match):
 def generate_pkt(pkt_num, src, dst, sport, dport, protocol, rule_id):
     pkt = None
     if protocol == 6:
-        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/TCP(sport=sport, dport=dport)/"{}".format(pkt_num)
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/TCP(sport=sport, dport=dport)
     elif protocol == 17:
-        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/UDP(sport=sport, dport=dport)/"{}".format(pkt_num)
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/UDP(sport=sport, dport=dport)
     elif protocol == 1:
-        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/ICMP()/"{}".format(pkt_num)
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id)/ICMP()
     else: 
-        pkt = IP(src=src, dst=dst, tos=255, id=rule_id, proto=protocol)/"{}".format(pkt_num)
+        pkt = IP(src=src, dst=dst, tos=255, id=rule_id, proto=protocol)
     return pkt
 
 # 生成数据包文件 ip头部中的id为匹配的rule编号

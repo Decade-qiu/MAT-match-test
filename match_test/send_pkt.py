@@ -11,7 +11,7 @@ from scapy.contrib.igmp import IGMP
 conf.L3socket = L3RawSocket 
 
 # debug
-x = IP(src='58.249.190.113', dst='128.1.1.1', tos=255, id=222, proto=47)/TCP()
+x = IP(src='0.0.0.1', dst='0.0.0.2', tos=255, id=222, proto=47)/TCP()
 x.show()
 send(x)
 exit()

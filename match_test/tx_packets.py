@@ -38,9 +38,8 @@ def main(pkt_file):
             pkt = generate_pkt(src, dst, sport, dport, protocol, num)
             send(pkt, verbose=False)
             ac_num += 1
-    sleep(1)
     for i in range(100): 
-        send(IP(src="0.0.1.0", dst="1.1.1.1", tos=255, id=65535))
+        send(IP(src="0.0.0.1", dst="0.0.0.1", tos=254, id=65535))
     sleep(2)
     print("Has send {} packets.".format(ac_num))
     return pkts, ac_num
