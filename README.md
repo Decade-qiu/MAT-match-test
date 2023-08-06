@@ -1,4 +1,4 @@
-### 生成指定名称的网络命名空间
+## 生成指定名称的网络命名空间
 ```
 sudo python3 -u build_netspace.py --netspace name
 ```
@@ -8,7 +8,7 @@ sudo python3 -u build_netspace.py --netspace MAT
 ```
 - name 网络命名空间名称
 
-### 生成iptbales rule和packet，并记录对应的匹配信息到output文件夹
+## 生成iptbales rule和packet，并记录对应的匹配信息到output文件夹
 ```
 sudo ip netns exec name python3 -u gen_packet_rule.py [--rules_num a] [--pkt_factor b] --netspace name
 ```
@@ -20,7 +20,7 @@ sudo ip netns exec MAT python3 -u gen_packet_rule.py --rules_num 3000 --pkt_fact
 - a 为生成的rule数量
 - b 为生成的pkt数量与rule数量比值
 
-### 发送数据包文件进行测试
+## 发送数据包文件进行测试
 ```
 ./packets/send pcap_file_path interface_name
 ```
