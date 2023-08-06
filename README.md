@@ -29,19 +29,12 @@ sudo ip netns exec MAT python3 -u gen_packet_rule.py --rules_num 3000 --pkt_fact
 sudo ./packets/send output/packets.pcap ens33 
 ```
 - pcap_file_path 为pcap数据包文件位置
-
-```
-|-- 发送出去的数据包格式
-
-|---- Ether 14bytes
-
-|------ Ip 20bytes (`TOS=0xff` `ID=该数据包匹配的Rule编号`)
-
-|-------- Transport 
-
-|---------- udp 8bytes
-
-|---------- tcp 20bytes
-```
-
 - interface_name 为指定的发送接口
+- 发送出去的数据包格式
+```
+|---| Ether 14bytes
+    |---| Ip 20bytes (`TOS=0xff` `ID=该数据包匹配的Rule编号`)
+        |----| Transport 
+             |----- udp 8bytes
+             |----- tcp 20bytes
+```
