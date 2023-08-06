@@ -32,9 +32,9 @@ sudo ./packets/send output/packets.pcap ens33
 - interface_name 为指定的发送接口
 - 发送出去的数据包格式
 ```
-|---| Ether 14bytes
-    |---| Ip 20bytes (`TOS=0xff` `ID=该数据包匹配的Rule编号`)
-        |----| Transport 
-             |----- udp 8bytes
-             |----- tcp 20bytes
+├── Ether (14bytes)
+    ├── Ip (20bytes `TOS=0xff` `ID=该数据包匹配的Rule编号`)
+            ├── Transport 
+            ├── udp (8bytes)
+            └── tcp (20bytes)
 ```
