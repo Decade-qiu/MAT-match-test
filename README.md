@@ -14,11 +14,11 @@ sudo ip netns exec name python3 -u gen_packet_rule.py [--rules_num a] [--pkt_fac
 ```
 - example 
 ```
-sudo ip netns exec MAT python3 -u gen_packet_rule.py --rules_num 3000 --pkt_factor 2 --netspace MAT
+sudo ip netns exec MAT python3 -u gen_packet_rule.py --rules_num 100 --pkt_factor 2 --netspace MAT
 ```
 - name 为网络命名空间名称
-- a 为生成的rule数量
-- b 为生成的pkt数量与rule数量比值
+- a 为每个数据集生种子成的rule数量（共12个数据集种子）
+- b $packet\_num = rule\_num * (b + 1)$
 
 ## 发送数据包文件进行测试
 ```
