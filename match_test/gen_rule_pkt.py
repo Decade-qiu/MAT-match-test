@@ -227,6 +227,8 @@ def tuple2rule(t):
     # 去除匹配条件只有协议的规则
     if (src=="0.0.0.0/0" and dst=="0.0.0.0/0" and sport=="0:65535" and dport=="0:65535"):
         return
+    if (src == "0.0.0.0/0" and dst != "0.0.0.0/0"):
+        src = dst
     # 是否有端口号
     if protocol in [6, 17]:
         add(src, dst, protocol, sport, dport, t_sport, t_dport, t_protocol)
