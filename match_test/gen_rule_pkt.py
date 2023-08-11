@@ -340,6 +340,7 @@ def generate_pkt(pkt_num, src, dst, sport, dport, protocol, rule_id):
 # 生成数据包文件 ip头部中的id为匹配的rule编号
 def get_pcap(file):
     with open(file, "r") as f:
+        packets_file = open(os.path.join(parent_path, "output", "packets"), 'w')
         lines = f.readlines()
         pkts = []
         for line in lines:
@@ -347,6 +348,7 @@ def get_pcap(file):
             line = line.strip()[index:].split()
             if (int(line[1]) == 65535): continue
             pkts.append(generate_pkt(int(line[1]), line[4], line[5], int(line[6]), int(line[7]), int(line[8]), int(line[9])))
+            packets_file.write("ID={} {} {} {} {} {} {}\n".format(line[1], line[4], line[5], line[6], line[7], line[8], line[9]))
         wrpcap(os.path.join(parent_path, "output", "packets.pcap"), pkts)
 
 # 获取匹配的输出结果<packet_id, rule_id>
