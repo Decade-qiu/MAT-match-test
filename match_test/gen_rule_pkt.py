@@ -124,7 +124,7 @@ def get_sport_dport(port_range, pf_port):
 
 # 根据iptables规则生成packet测试集
 def gen_pkt_iptables():
-    global rule_list, rule_set
+    global rule_list, rule_set, filter_rule
     print("Generate packets from iptables rules...")
     rule_list = list(rule_set)
     rule_list.sort(key=sort_rules)
@@ -175,9 +175,12 @@ def save_pkt_iptabes(model='w'):
         for p in pkts:
             packets.write(p+"\n")
     with open(os.path.join(parent_path, "output", "rule_set"), 'w') as filter_rule:
+        iptables_set = open(os.path.join(parent_path, "output", "rule_set.iptables"), 'w')
         for dx in range(0, len(rule_list)):
             t = rule_list[dx]
-            filter_rule.write('{} -m comment --comment "{}"\n'.format(t, dx+1))
+            iptables_set.write('{} -m comment --comment "{}"\n'.format(t, dx+1))
+            src, dst, sport, dport, protocol, pf, sf, df = get_head(rule_list[dx])
+            filter_rule.write('{} {} {} {} {} {} {} {}\n'.format(src, dst, protocol, sport, dport, int(pf), int(sf), int(df)))
 
 # 保存tuples并生成对应pkt头部信息
 def save_pkt_tuples():
@@ -398,7 +401,7 @@ def update_iptables_rules(netns):
     os.system("ip netns exec {} iptables -A OUTPUT -p tcp --tcp-flags URG URG -j DROP".format(NETNS))
     # 读取规则并执行
     total_rules = 0
-    with open(os.path.join(parent_path, "output", "rule_set"), "r") as f:
+    with open(os.path.join(parent_path, "output", "rule_set.iptables"), "r") as f:
         for line in f.readlines():
             line = line.strip()
             cmd = "ip netns exec {} {}".format(NETNS, line)
