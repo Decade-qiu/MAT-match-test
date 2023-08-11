@@ -180,7 +180,7 @@ def save_pkt_iptabes(model='w'):
             t = rule_list[dx]
             iptables_set.write('{} -m comment --comment "{}"\n'.format(t, dx+1))
             src, dst, sport, dport, protocol, pf, sf, df = get_head(rule_list[dx])
-            filter_rule.write('{} {} {} {} {} {} {} {}\n'.format(src, dst, protocol, sport, dport, int(pf), int(sf), int(df)))
+            filter_rule.write('{} {} {} {} {} {} {} {} {}\n'.format(src, dst, protocol, sport, dport, int(pf), int(sf), int(df), dx+1))
 
 # 保存tuples并生成对应pkt头部信息
 def save_pkt_tuples():
