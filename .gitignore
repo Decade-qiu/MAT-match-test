@@ -1,8 +1,11 @@
 # dir 不需要提交的目录
 /.vscode
+/match_test/__pycache__
 
 # file
 *.pyc
+/output/*
+
 
 
 
