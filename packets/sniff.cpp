@@ -43,13 +43,10 @@ int main() {
 
     char * dev = "veth1_MAT";
 
-    // 打开网络设备
-    handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf); // 替换为实际的网络设备名称
+    handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf); 
 
-    // 抓包并调用packet_handler处理每个包
     pcap_loop(handle, 0, packet_handler, NULL);
 
-    // 关闭网络设备
     pcap_close(handle);
 
     return 0;

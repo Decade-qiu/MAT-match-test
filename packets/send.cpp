@@ -23,6 +23,29 @@ libnet_ptag_t build_tcp_header(libnet_t* libnet_handle, const uint8_t* packet_da
     const struct libnet_tcp_hdr* tcp_header = reinterpret_cast<const struct libnet_tcp_hdr*>(packet_data + sizeof(struct libnet_ipv4_hdr));
     uint16_t src_port = ntohs(tcp_header->th_sport);
     uint16_t dst_port = ntohs(tcp_header->th_dport);
+    uint32_t src_ip = 0, dst_ip = 0;
+
+    // 计算 TCP 伪首部的校验和
+    uint32_t pseudo_sum = 0;
+    pseudo_sum += (src_ip >> 16) & 0xFFFF;
+    pseudo_sum += src_ip & 0xFFFF;
+    pseudo_sum += (dst_ip >> 16) & 0xFFFF;
+    pseudo_sum += dst_ip & 0xFFFF;
+    pseudo_sum += htons(IPPROTO_TCP);
+    pseudo_sum += htons(LIBNET_TCP_H);
+    uint32_t tcp_data_len = 0; 
+    uint32_t tcp_sum = 0;
+    uint16_t* tcp_words = (uint16_t*)(tcp_header);
+    for (int i = 0; i < LIBNET_TCP_H + tcp_data_len; i += 2) {
+        if (i == LIBNET_TCP_H) {
+            continue;
+        }
+        tcp_sum += ntohs(tcp_words[i / 2]);
+    }
+    uint32_t total_sum = pseudo_sum + tcp_sum;
+    while (total_sum >> 16) {
+        total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
+    }
 
     return libnet_build_tcp(
         src_port,                // Source port

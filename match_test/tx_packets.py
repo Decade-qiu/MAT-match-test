@@ -11,6 +11,7 @@ conf.verb = 0
 
 # 构造数据包
 def generate_pkt(src, dst, sport, dport, protocol, pkt_num):
+    pkt_num %= 65535
     pkt = None
     if protocol == 6:
         pkt = IP(src=src, dst=dst, tos=255, id=pkt_num)/TCP(sport=sport, dport=dport)
@@ -28,11 +29,14 @@ def main(pkt_file):
     with open(pkt_file, "r") as f:
         pkts = f.readlines()
         pkt_num = len(pkts)
+        print("Send packets...")
         for num in range(1, pkt_num+1):
             line = pkts[num-1].strip()
             if len(line) == 0: continue
             tuples = line.split()
             _, src, dst, protocol, sport, dport = [tuples[i] for i in range(6)]
+            # src = str(IPv4Address(int(src)))
+            # dst = str(IPv4Address(int(dst)))
             protocol, sport, dport = int(protocol), int(sport), int(dport)
             num = int(_[3:])
             pkt = generate_pkt(src, dst, sport, dport, protocol, num)

@@ -168,6 +168,18 @@ def gen_pkt_iptables():
     rule_list = res_rules
     return packets
 
+def prefix_length_to_mask(prefix_length):
+    mask = 0xFFFFFFFF << (32 - prefix_length)
+    return (mask >> 24) & 0xFF, (mask >> 16) & 0xFF, (mask >> 8) & 0xFF, mask & 0xFF
+
+def prefix_to_mask(ip_with_prefix):
+    ip_parts = ip_with_prefix.split("/")
+    ip = ip_parts[0]
+    prefix_length = int(ip_parts[1])
+    mask_parts = prefix_length_to_mask(prefix_length)
+    mask_str = ".".join(map(str, mask_parts))
+    return f"{int(IPv4Address(ip))}/{int(IPv4Address(mask_str))}"
+
 # 保存iptables规则
 def save_pkt_iptabes(model='w'):
     with open(os.path.join(cur_path, "filter_tuple_trace"), model) as packets:
@@ -180,7 +192,7 @@ def save_pkt_iptabes(model='w'):
             t = rule_list[dx]
             iptables_set.write('{} -m comment --comment "{}"\n'.format(t, dx+1))
             src, dst, sport, dport, protocol, pf, sf, df = get_head(rule_list[dx])
-            filter_rule.write('{} {} {} {} {} {} {} {} {}\n'.format(src, dst, protocol, sport, dport, int(pf), int(sf), int(df), dx+1))
+            filter_rule.write('{} {} {} {} {} {} {} {} {}\n'.format(prefix_to_mask(src), prefix_to_mask(dst), protocol, sport, dport, int(pf), int(sf), int(df), dx+1))
 
 # 保存tuples并生成对应pkt头部信息
 def save_pkt_tuples():
@@ -306,7 +318,7 @@ def gen_filter_tuple():
             # if (not file.startswith("fw")): continue
             if os.path.isfile(os.path.join(dir_path, file)):
                 print("Generate tuples from {}.".format(file))
-                command = os.path.join(parent_path, "classbench-ng", "classbench")+" generate v4 "+os.path.join(dir_path, file)+" --count={} --db-generator=".format(filter_num)+os.path.join(parent_path, "classbench-ng", "vendor", "db_generator", "db_generator")
+                command = os.path.join(parent_path, "classbench-ng", "classbench")+" generate v4 "+os.path.join(dir_path, file)+" --count={} --db-generator=".format(filter_num)+os.path.join(parent_path, "cl-assbench-ng", "vendor", "db_generator", "db_generator")
                 output = os.popen(command).read()
                 f.write(output)
 
@@ -348,14 +360,13 @@ def get_pcap(file):
             line = line.strip()[index:].split()
             if (int(line[1]) == 65535): continue
             pkts.append(generate_pkt(int(line[1]), line[4], line[5], int(line[6]), int(line[7]), int(line[8]), int(line[9])))
-            packets_file.write("ID={} {} {} {} {} {} {}\n".format(line[1], line[4], line[5], line[6], line[7], line[8], line[9]))
+            packets_file.write("ID={} {} {} {} {} {} {}\n".format(line[1], int(IPv4Address(line[4])), int(IPv4Address(line[5])), line[8], line[6], line[7], line[9]))
         wrpcap(os.path.join(parent_path, "output", "packets.pcap"), pkts)
 
 # 获取匹配的输出结果<packet_id, rule_id>
 def get_match_out():
     os.system("truncate -s 0 /var/log/kern.log")
     sleep(2)
-    print("Send packets...")
     pkts = os.path.join(parent_path, "output", "packets")
     packet_set, ac_num = tx_packets.main(pkts)
     # 获取/var/log/kern.log
@@ -429,4 +440,5 @@ def main(rules_num, scale, netspace):
     get_match_out()
 
 if __name__ == "__main__":
-    update_iptables_rules("MAT")
+    # update_iptables_rules("MAT")
+    get_match_out()
