@@ -305,12 +305,26 @@ def gen_filter_rule():
             fd[0] = fd[0][1:]
             tuple2rule(fd)
 
+def get_formatted_datetime():
+    now = datetime.now()
+    
+    # 获取月、日、小时、分钟
+    month = now.strftime("%m")
+    day = now.strftime("%d")
+    hour = now.strftime("%H")
+    minute = now.strftime("%M")
+
+    # 构建格式化的日期时间字符串
+    formatted_datetime = f"{month}-{day}-{hour}-{minute}"
+
+    return formatted_datetime
+
 # 使用classbench中Filter set generator生成tuple规则
 def gen_filter_tuple():
     global filter_num, smooth, address_scope, port_scope
     rrr_num, ff = 0, 1
     # print(os.path.join(cur_path, "filter_tuple"))
-    cnt, total = 0, 5
+    cnt, total, s = 0, 28, 0
     with open(os.path.join(cur_path, "filter_tuple"), "w") as f: 
         dir_path = os.path.join(parent_path, "classbench-ng", "vendor", "parameter_files")
         for i in range(total):
@@ -318,9 +332,12 @@ def gen_filter_tuple():
                 cnt += 1
                 # if (not file.startswith("fw1")): continue
                 if os.path.isfile(os.path.join(dir_path, file)):
-                    print("Generate tuples from {}.".format(file), end=' ')
+                    print("Generate {:9}.".format(file), end=' ')
                     if ff == 1:
-                        command = os.path.join(parent_path, "classbench-ng", "classbench")+" generate v4 "+os.path.join(dir_path, file)+" --count={} --db-generator=".format(filter_num)+os.path.join(parent_path, "classbench-ng", "vendor", "db_generator", "db_generator")
+                        cur_num = filter_num
+                        # if file.startswith("fw"): cur_num = 25000
+                        # elif file.startswith("ipc"): cur_num = 30000
+                        command = os.path.join(parent_path, "classbench-ng", "classbench")+" generate v4 "+os.path.join(dir_path, file)+" --count={} --db-generator=".format(cur_num)+os.path.join(parent_path, "classbench-ng", "vendor", "db_generator", "db_generator")
                         # print(os.path.join(dir_path, file), cnt)
                         output = os.popen(command).read()
                     else:
@@ -329,7 +346,7 @@ def gen_filter_tuple():
                         output = os.popen(command).read()
                     tp = len(output.split("\n"))
                     rrr_num += tp
-                    print(tp, datetime.now(), cnt)
+                    print(tp, get_formatted_datetime(), f"{rrr_num:6}", f"{rrr_num:3}", total*12)
                     f.write(output)
     with open(os.path.join(cur_path, "filter_tuple"), "r") as f:
         lines = f.readlines()
